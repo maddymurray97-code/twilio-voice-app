@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
     
     console.log(`Call from ${callerNumber} to ${calledNumber}`);
     
-    // Look up business in Airtable
     const business = await getBusinessSettings(calledNumber);
     
     if (!business) {
@@ -28,14 +27,10 @@ export async function POST(req: NextRequest) {
       });
     }
     
-    // Send SMS to caller
     await sendSMS(callerNumber, business, calledNumber);
-    
-    // Notify business owner
     await notifyOwner(business, callerNumber);
     
-    // Play message to caller
-    const xml = '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thanks for calling! We\'ve sent you a text message with information on how to book an appointment or get in touch.</Say><Hangup/></Response>';
+    const xml = '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thanks for calling! We have sent you a text message with information on how to book an appointment or get in touch.</Say><Hangup/></Response>';
     
     return new NextResponse(xml, {
       status: 200,
@@ -94,9 +89,68 @@ async function sendSMS(to: string, business: any, fromNumber: string) {
     return;
   }
   
-  let message = business.customMessage || 
-    `Hi! Thanks for calling ${business.name}. We can't answer right now, but we can help!\n\n📅 Book an appointment: ${business.bookingLink}\n💬 Or reply to this text with your question\n\nWe'll respond within 1 hour!`;
+  let message = business.customMessage || `Hi! Thanks for calling ${business.name}. We cannot answer right now, but we can help! Book an appointment: ${business.bookingLink} Or reply to this text with your question. We will respond within 1 hour!`;
   
-  // Replace {booking_link} placeholder if present
   if (business.bookingLink) {
-    messa
+    message = message.replace('{booking_link}', business.bookingLink);
+  }
+  
+  try {
+    const response = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          To: to,
+          From: fromNumber,
+          Body: message,
+        }).toString(),
+      }
+    );
+    
+    console.log('SMS sent to caller:', to);
+    const result = await response.json();
+    console.log('SMS result:', result);
+  } catch (error) {
+    console.error('SMS error:', error);
+  }
+}
+
+async function notifyOwner(business: { name: string; ownerPhone: string }, callerNumber: string) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_FROM_NUMBER;
+  
+  if (!accountSid || !authToken || !fromNumber) {
+    console.error('Missing Twilio credentials for owner notification');
+    return;
+  }
+  
+  const message = `Missed call alert for ${business.name}! Caller: ${callerNumber}. They have been sent your booking link and can reply via SMS.`;
+  
+  try {
+    await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          To: business.ownerPhone,
+          From: fromNumber,
+          Body: message,
+        }).toString(),
+      }
+    );
+    
+    console.log('Notification sent to owner:', business.ownerPhone);
+  } catch (error) {
+    console.error('Owner notification error:', error);
+  }
+}
