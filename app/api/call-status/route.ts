@@ -71,10 +71,10 @@ async function getBusinessSettings(twilioNumber: string) {
     if (data.records && data.records.length > 0) {
       const record = data.records[0].fields;
       return {
-        name: record['Business Name'],
-        ownerPhone: record['Owner Phone Number'],
-        bookingLink: record['Booking Link'],
-        customMessage: record['SMS Template'],
+        name: record['Business Name'] as string,
+        ownerPhone: record['Owner Phone Number'] as string,
+        bookingLink: record['Booking Link'] as string,
+        customMessage: record['SMS Template'] as string | undefined,
       };
     }
     
@@ -89,65 +89,14 @@ async function sendSMS(to: string, business: any, fromNumber: string) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   
+  if (!accountSid || !authToken) {
+    console.error('Missing Twilio credentials');
+    return;
+  }
+  
   let message = business.customMessage || 
     `Hi! Thanks for calling ${business.name}. We can't answer right now, but we can help!\n\n📅 Book an appointment: ${business.bookingLink}\n💬 Or reply to this text with your question\n\nWe'll respond within 1 hour!`;
   
   // Replace {booking_link} placeholder if present
   if (business.bookingLink) {
-    message = message.replace('{booking_link}', business.bookingLink);
-  }
-  
-  try {
-    const response = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          To: to,
-          From: fromNumber,
-          Body: message,
-        }),
-      }
-    );
-    
-    console.log('SMS sent to caller:', to);
-    const result = await response.json();
-    console.log('SMS result:', result);
-  } catch (error) {
-    console.error('SMS error:', error);
-  }
-}
-
-async function notifyOwner(business: any, callerNumber: string) {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_FROM_NUMBER;
-  
-  const message = `🔔 Missed call alert for ${business.name}!\n\nCaller: ${callerNumber}\n\nThey've been sent your booking link and can reply via SMS.`;
-  
-  try {
-    await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          To: business.ownerPhone,
-          From: fromNumber,
-          Body: message,
-        }),
-      }
-    );
-    
-    console.log('Notification sent to owner:', business.ownerPhone);
-  } catch (error) {
-    console.error('Owner notification error:', error);
-  }
-}
+    messa
