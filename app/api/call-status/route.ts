@@ -89,7 +89,11 @@ async function sendSMS(to: string, business: any, fromNumber: string) {
     return;
   }
   
-  let message = business.customMessage || `Hi! Thanks for calling ${business.name}. We cannot answer right now, but we can help! Book an appointment: ${business.bookingLink} Or reply to this text with your question. We will respond within 1 hour!`;
+  let message = business.customMessage || `Hi! Thanks for calling ${business.name}. We can't answer right now, but we can help!
+
+📅 Book an appointment: ${business.bookingLink}
+
+💬 Reply to this text with your question and we'll respond within 1 hour!`;
   
   if (business.bookingLink) {
     message = message.replace('{booking_link}', business.bookingLink);
