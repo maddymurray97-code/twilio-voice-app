@@ -130,7 +130,11 @@ async function notifyOwner(business: { name: string; ownerPhone: string }, calle
     return;
   }
   
-  const message = `Missed call alert for ${business.name}! Caller: ${callerNumber}. They have been sent your booking link and can reply via SMS.`;
+  const message = `[MISSED CALL ALERT] ${business.name}
+
+Caller: ${callerNumber}
+
+They have been sent your booking link and can reply via SMS to this number.`;
   
   try {
     await fetch(
