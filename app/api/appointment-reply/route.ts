@@ -82,12 +82,11 @@ export async function POST(req: NextRequest) {
 }
 
 async function findUpcomingAppointment(customerPhone: string) {
-  // Format date to match Airtable's M/D/YYYY format (no leading zeros)
   const now = new Date();
-  const month = now.getMonth() + 1; // JavaScript months are 0-indexed
+  const month = now.getMonth() + 1;
   const day = now.getDate();
   const year = now.getFullYear();
-  const today = `${month}/${day}/${year}`; // Creates "1/11/2026"
+  const today = `${month}/${day}/${year}`;
   
   console.log(`🔍 Looking for appointment with phone: ${customerPhone}, date >= ${today}`);
   
@@ -158,7 +157,6 @@ async function notifyOwner(appointment: any, action: string) {
   const fields = appointment.fields;
   const businessId = fields['Business Name'][0];
   
-  // Get business owner phone
   const businessData = await fetch(
     `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Businesses/${businessId}`,
     {
@@ -210,4 +208,25 @@ async function forwardToOwner(appointment: any, customerPhone: string, message: 
   const ownerPhone = business.fields['Owner Phone Number'];
   const twilioPhone = business.fields['Twilio Phone Number'];
   
-  if (!o
+  if (!ownerPhone) return;
+  
+  const forwardMessage = `[APPOINTMENT MESSAGE] ${fields['Customer Name']}\n\nFrom: ${customerPhone}\nRe: ${fields['Service/Meeting Title']} on ${fields['Appointment Date']}\n\nMessage: ${message}\n\nReply to this thread to respond.`;
+  
+  await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64'),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        To: ownerPhone,
+        From: twilioPhone,
+        Body: forwardMessage
+      })
+    }
+  );
+  
+  console.log(`📨 Forwarded message to owner`);
+}
