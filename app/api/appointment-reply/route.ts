@@ -20,12 +20,15 @@ export async function POST(req: NextRequest) {
     const appointment = await findUpcomingAppointment(customerPhone);
     
     if (!appointment) {
+      console.log(`❌ No appointment found for ${customerPhone}`);
       const replyXml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>We couldn't find your upcoming appointment. Please call us directly if you need help.</Message></Response>`;
       return new NextResponse(replyXml, {
         status: 200,
         headers: { 'Content-Type': 'text/xml' }
       });
     }
+    
+    console.log(`✅ Found appointment for ${appointment.fields['Customer Name']}`);
     
     const aptFields = appointment.fields;
     
@@ -79,13 +82,22 @@ export async function POST(req: NextRequest) {
 }
 
 async function findUpcomingAppointment(customerPhone: string) {
-  const today = new Date().toISOString().split('T')[0];
+  // Format date to match Airtable's M/D/YYYY format (no leading zeros)
+  const now = new Date();
+  const month = now.getMonth() + 1; // JavaScript months are 0-indexed
+  const day = now.getDate();
+  const year = now.getFullYear();
+  const today = `${month}/${day}/${year}`; // Creates "1/11/2026"
+  
+  console.log(`🔍 Looking for appointment with phone: ${customerPhone}, date >= ${today}`);
   
   const formula = `AND(
     {Customer Phone} = '${customerPhone}',
     OR({Status} = 'Scheduled', {Status} = 'Confirmed'),
     {Appointment Date} >= '${today}'
   )`;
+  
+  console.log(`📋 Airtable formula: ${formula}`);
   
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Appointments?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=Appointment Date&sort[0][direction]=asc`;
   
@@ -94,6 +106,12 @@ async function findUpcomingAppointment(customerPhone: string) {
   });
   
   const data = await response.json();
+  console.log(`📋 Found ${data.records?.length || 0} matching appointments`);
+  
+  if (data.records && data.records.length > 0) {
+    console.log(`First appointment: ${data.records[0].fields['Customer Name']} on ${data.records[0].fields['Appointment Date']}`);
+  }
+  
   return data.records[0];
 }
 
@@ -192,25 +210,4 @@ async function forwardToOwner(appointment: any, customerPhone: string, message: 
   const ownerPhone = business.fields['Owner Phone Number'];
   const twilioPhone = business.fields['Twilio Phone Number'];
   
-  if (!ownerPhone) return;
-  
-  const forwardMessage = `[APPOINTMENT MESSAGE] ${fields['Customer Name']}\n\nFrom: ${customerPhone}\nRe: ${fields['Service/Meeting Title']} on ${fields['Appointment Date']}\n\nMessage: ${message}\n\nReply to this thread to respond.`;
-  
-  await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64'),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        To: ownerPhone,
-        From: twilioPhone,
-        Body: forwardMessage
-      })
-    }
-  );
-  
-  console.log(`📨 Forwarded message to owner`);
-}
+  if (!o
