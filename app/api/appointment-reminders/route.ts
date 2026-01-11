@@ -157,7 +157,6 @@ async function markReminderSent(appointmentId: string, reminderType: string) {
 }
 
 function formatDate(dateString: string): string {
-  // Parse M/D/YYYY format
   const parts = dateString.split('/');
   const month = parseInt(parts[0]);
   const day = parseInt(parts[1]);
@@ -167,31 +166,3 @@ function formatDate(dateString: string): string {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return days[date.getDay()];
 }
-```
-
----
-
-## Steps:
-
-1. Go to GitHub → `app/api/appointment-reminders/route.ts`
-2. Click edit (✏️)
-3. **Select ALL** (Ctrl+A / Cmd+A)
-4. **Delete** existing code
-5. **Paste** the code above
-6. Commit message: `Fix date format for reminder matching`
-7. Click "Commit changes"
-8. Wait for Vercel to deploy (~2 minutes)
-
----
-
-## Then Test:
-
-1. **Make sure your appointment has:**
-   - Date: `11/1/2026` (today)
-   - Time: `6:55 PM` (2 hours from now - adjust to actual time)
-   - Status: `Scheduled`
-   - Reminder 2h Sent: ☐ UNCHECKED
-
-2. **Visit:**
-```
-   https://twilio-voice-app-two.vercel.app/api/appointment-reminders?final=test
