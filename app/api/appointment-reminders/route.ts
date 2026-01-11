@@ -31,18 +31,16 @@ export async function GET(req: NextRequest) {
 async function sendReminders(now: Date, hoursAhead: number, reminderType: string) {
   const targetTime = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
   
-  // Get start and end of target hour (to catch appointments within that hour)
-  const startOfHour = new Date(targetTime);
-  startOfHour.setMinutes(0, 0, 0);
+  // Format date to match Airtable's M/D/YYYY format (no leading zeros)
+  const month = targetTime.getMonth() + 1;
+  const day = targetTime.getDate();
+  const year = targetTime.getFullYear();
+  const targetDate = `${month}/${day}/${year}`;
   
-  const endOfHour = new Date(targetTime);
-  endOfHour.setMinutes(59, 59, 999);
+  console.log(`📅 Looking for ${reminderType} reminders for date: ${targetDate}`);
   
-  const targetDateStart = startOfHour.toISOString().split('T')[0];
-  const targetDateEnd = endOfHour.toISOString().split('T')[0];
-  
-  // Get appointments due in target window that haven't received this reminder
-  const appointments = await getAppointmentsDue(targetDateStart, targetDateEnd, reminderType);
+  // Get appointments due at target time that haven't received this reminder
+  const appointments = await getAppointmentsDue(targetDate, reminderType);
   
   console.log(`Found ${appointments.length} appointments needing ${reminderType} reminder`);
   
@@ -52,18 +50,17 @@ async function sendReminders(now: Date, hoursAhead: number, reminderType: string
   }
 }
 
-async function getAppointmentsDue(targetDateStart: string, targetDateEnd: string, reminderType: string) {
+async function getAppointmentsDue(targetDate: string, reminderType: string) {
   const reminderField = `Reminder ${reminderType} Sent`;
   
   const formula = `AND(
-    OR(
-      {Appointment Date} = '${targetDateStart}',
-      {Appointment Date} = '${targetDateEnd}'
-    ),
+    {Appointment Date} = '${targetDate}',
     {Status} = 'Scheduled',
     {${reminderField}} = FALSE(),
     NOT({Customer Phone} = '')
   )`;
+  
+  console.log(`🔍 Airtable formula: ${formula}`);
   
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Appointments?filterByFormula=${encodeURIComponent(formula)}`;
   
@@ -72,7 +69,12 @@ async function getAppointmentsDue(targetDateStart: string, targetDateEnd: string
   });
   
   const data = await response.json();
-  return data.records;
+  
+  if (data.records && data.records.length > 0) {
+    console.log(`✅ Found appointments for ${data.records.map((r: any) => r.fields['Customer Name']).join(', ')}`);
+  }
+  
+  return data.records || [];
 }
 
 async function sendReminderSMS(appointment: any, reminderType: string) {
@@ -150,10 +152,46 @@ async function markReminderSent(appointmentId: string, reminderType: string) {
       })
     }
   );
+  
+  console.log(`✅ Marked ${reminderField} for appointment ${appointmentId}`);
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString + 'T00:00:00');
+  // Parse M/D/YYYY format
+  const parts = dateString.split('/');
+  const month = parseInt(parts[0]);
+  const day = parseInt(parts[1]);
+  const year = parseInt(parts[2]);
+  
+  const date = new Date(year, month - 1, day);
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return days[date.getDay()];
 }
+```
+
+---
+
+## Steps:
+
+1. Go to GitHub → `app/api/appointment-reminders/route.ts`
+2. Click edit (✏️)
+3. **Select ALL** (Ctrl+A / Cmd+A)
+4. **Delete** existing code
+5. **Paste** the code above
+6. Commit message: `Fix date format for reminder matching`
+7. Click "Commit changes"
+8. Wait for Vercel to deploy (~2 minutes)
+
+---
+
+## Then Test:
+
+1. **Make sure your appointment has:**
+   - Date: `11/1/2026` (today)
+   - Time: `6:55 PM` (2 hours from now - adjust to actual time)
+   - Status: `Scheduled`
+   - Reminder 2h Sent: ☐ UNCHECKED
+
+2. **Visit:**
+```
+   https://twilio-voice-app-two.vercel.app/api/appointment-reminders?final=test
