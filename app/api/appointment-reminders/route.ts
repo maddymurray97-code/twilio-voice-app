@@ -11,14 +11,11 @@ export async function GET(req: NextRequest) {
     
     const now = new Date();
     
-    // Send 48h reminders
-    await sendReminders(now, 48, '48h');
-    
     // Send 24h reminders
     await sendReminders(now, 24, '24h');
     
-    // Send 2h reminders
-    await sendReminders(now, 2, '2h');
+    // Send 1h reminders
+    await sendReminders(now, 1, '1h');
     
     return NextResponse.json({ success: true, message: 'Reminders checked' });
     
@@ -91,12 +88,10 @@ async function sendReminderSMS(appointment: any, reminderType: string) {
   const time = fields['Appointment Time'];
   const date = formatDate(fields['Appointment Date']);
   
-  if (reminderType === '48h') {
-    message = `Hi ${customerName}! Excited to see you ${date} at ${time} for your ${service}! 😊`;
-  } else if (reminderType === '24h') {
-    message = `Reminder: Your ${service} is tomorrow at ${time}. Reply CONFIRM or text if you need to reschedule.`;
-  } else if (reminderType === '2h') {
-    message = `See you in 2 hours at ${time} for your ${service}! Reply if you have any questions.`;
+  if (reminderType === '24h') {
+    message = `Hi ${customerName}! Your ${service} appointment is tomorrow at ${time}. Reply CONFIRM to confirm or let us know if you need to reschedule.`;
+  } else if (reminderType === '1h') {
+    message = `See you in 1 hour at ${time} for your ${service}! Reply if you have any questions.`;
   }
   
   try {
