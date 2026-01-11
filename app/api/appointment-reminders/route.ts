@@ -31,7 +31,6 @@ export async function GET(req: NextRequest) {
 async function sendReminders(now: Date, hoursAhead: number, reminderType: string) {
   const targetTime = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
   
-  // Format date to match Airtable's M/D/YYYY format (no leading zeros)
   const month = targetTime.getMonth() + 1;
   const day = targetTime.getDate();
   const year = targetTime.getFullYear();
@@ -39,7 +38,6 @@ async function sendReminders(now: Date, hoursAhead: number, reminderType: string
   
   console.log(`📅 Looking for ${reminderType} reminders for date: ${targetDate}`);
   
-  // Get appointments due at target time that haven't received this reminder
   const appointments = await getAppointmentsDue(targetDate, reminderType);
   
   console.log(`Found ${appointments.length} appointments needing ${reminderType} reminder`);
@@ -54,7 +52,6 @@ async function getAppointmentsDue(targetDate: string, reminderType: string) {
   const reminderField = `Reminder ${reminderType} Sent`;
   
   const formula = `AND(
-    {Appointment Date} = '${targetDate}',
     {Status} = 'Scheduled',
     {${reminderField}} = FALSE(),
     NOT({Customer Phone} = '')
@@ -69,6 +66,8 @@ async function getAppointmentsDue(targetDate: string, reminderType: string) {
   });
   
   const data = await response.json();
+  
+  console.log(`📋 Found ${data.records?.length || 0} total appointments`);
   
   if (data.records && data.records.length > 0) {
     console.log(`✅ Found appointments for ${data.records.map((r: any) => r.fields['Customer Name']).join(', ')}`);
