@@ -49,7 +49,15 @@ export async function GET(req: NextRequest) {
     const expiryDate = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
     
     if (businessId) {
-      await fetch(
+      console.log('📤 Updating Airtable business:', businessId);
+      console.log('📋 Update payload:', {
+        'Calendar Type': 'Google Calendar',
+        'Calendar Email': user.email,
+        'Calendar Sync Enabled': true,
+        tokenExpiry: expiryDate
+      });
+      
+      const airtableResponse = await fetch(
         `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Businesses/${businessId}`,
         {
           method: 'PATCH',
@@ -69,6 +77,18 @@ export async function GET(req: NextRequest) {
           })
         }
       );
+      
+      const airtableResult = await airtableResponse.json();
+      console.log('📋 Airtable response status:', airtableResponse.status);
+      console.log('📋 Airtable response:', airtableResult);
+      
+      if (!airtableResponse.ok) {
+        console.error('❌ Airtable update failed:', airtableResult);
+        return new NextResponse(
+          `Airtable Error: ${JSON.stringify(airtableResult, null, 2)}`, 
+          { status: 500, headers: { 'Content-Type': 'text/plain' } }
+        );
+      }
       
       console.log('✅ Updated Airtable with calendar credentials');
     }
@@ -122,6 +142,6 @@ export async function GET(req: NextRequest) {
     
   } catch (error) {
     console.error('Callback error:', error);
-    return new NextResponse('Authentication failed', { status: 500 });
+    return new NextResponse(`Error: ${error instanceof Error ? error.message : String(error)}`, { status: 500 });
   }
 }
