@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(replyXml, {
       status: 200,
       headers: { 'Content-Type': 'text/xml' }
-    });
+      });
     
   } catch (error) {
     console.error('Reply error:', error);
@@ -82,18 +82,12 @@ export async function POST(req: NextRequest) {
 }
 
 async function findUpcomingAppointment(customerPhone: string) {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const day = now.getDate();
-  const year = now.getFullYear();
-  const today = `${month}/${day}/${year}`;
+  console.log(`🔍 Looking for appointment with phone: ${customerPhone}`);
   
-  console.log(`🔍 Looking for appointment with phone: ${customerPhone}, date >= ${today}`);
-  
+  // Simplified: Find ANY appointment with this phone that's Scheduled or Confirmed
   const formula = `AND(
     {Customer Phone} = '${customerPhone}',
-    OR({Status} = 'Scheduled', {Status} = 'Confirmed'),
-    {Appointment Date} >= '${today}'
+    OR({Status} = 'Scheduled', {Status} = 'Confirmed')
   )`;
   
   console.log(`📋 Airtable formula: ${formula}`);
