@@ -10,22 +10,32 @@ export async function GET(req: NextRequest) {
     console.log('⏰ Checking for reminders to send...');
     
     const now = new Date();
+    const results = { '24h': 0, '1h': 0 };
     
     // Send 24h reminders
-    await sendReminders(now, 24, '24h');
+    results['24h'] = await sendReminders(now, 24, '24h');
     
     // Send 1h reminders
-    await sendReminders(now, 1, '1h');
+    results['1h'] = await sendReminders(now, 1, '1h');
     
-    return NextResponse.json({ success: true, message: 'Reminders checked' });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Reminders checked',
+      found24h: results['24h'],
+      found1h: results['1h'],
+      timestamp: now.toISOString()
+    });
     
   } catch (error) {
     console.error('Reminder error:', error);
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 }
 
-async function sendReminders(now: Date, hoursAhead: number, reminderType: string) {
+async function sendReminders(now: Date, hoursAhead: number, reminderType: string): Promise<number> {
   const targetTime = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
   
   const month = targetTime.getMonth() + 1;
@@ -43,6 +53,8 @@ async function sendReminders(now: Date, hoursAhead: number, reminderType: string
     await sendReminderSMS(apt, reminderType);
     await markReminderSent(apt.id, reminderType);
   }
+  
+  return appointments.length;
 }
 
 async function getAppointmentsDue(targetDate: string, reminderType: string) {
