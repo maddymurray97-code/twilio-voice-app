@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const user = await userResponse.json();
     console.log('👤 User:', user.email);
     
-    const expiryDate = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+    const expiryDate = new Date(Date.now() + tokens.expires_in * 1000).toISOString().split('T')[0];
     
     if (businessId) {
       console.log('📤 Updating Airtable business:', businessId);
