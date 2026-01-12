@@ -98,41 +98,77 @@ export async function GET(req: NextRequest) {
         <head>
           <style>
             body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
               display: flex;
               align-items: center;
               justify-content: center;
               min-height: 100vh;
               margin: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              background: linear-gradient(135deg, #ffa751 0%, #ffe259 100%);
             }
             .container {
               background: white;
-              padding: 3rem;
-              border-radius: 12px;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+              padding: 3rem 2.5rem;
+              border-radius: 16px;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.15);
               text-align: center;
-              max-width: 400px;
+              max-width: 480px;
             }
-            h1 { color: #2d3748; margin-bottom: 1rem; }
-            p { color: #4a5568; margin: 0.5rem 0; }
-            .success { font-size: 4rem; margin-bottom: 1rem; }
-            .email { 
-              background: #edf2f7; 
-              padding: 0.5rem 1rem; 
-              border-radius: 6px; 
-              margin: 1rem 0;
-              font-family: monospace;
+            .logo {
+              width: 60px;
+              height: 60px;
+              background: linear-gradient(135deg, #ff8a50 0%, #ffd140 100%);
+              border-radius: 50%;
+              margin: 0 auto 1.5rem;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 2rem;
+            }
+            h1 { 
+              color: #1a202c; 
+              margin-bottom: 0.5rem;
+              font-size: 1.75rem;
+              font-weight: 600;
+            }
+            .subtitle {
+              color: #718096;
+              margin-bottom: 1.5rem;
+              font-size: 1rem;
+            }
+            .email-box { 
+              background: #f7fafc; 
+              padding: 1rem 1.25rem; 
+              border-radius: 8px; 
+              margin: 1.5rem 0;
+              font-family: 'SF Mono', Monaco, monospace;
+              color: #2d3748;
+              font-size: 0.95rem;
+              border: 1px solid #e2e8f0;
+            }
+            .info {
+              color: #4a5568;
+              font-size: 0.9rem;
+              line-height: 1.6;
+              margin: 1.5rem 0;
+            }
+            .close-text {
+              margin-top: 2rem;
+              color: #a0aec0;
+              font-size: 0.875rem;
             }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="success">✅</div>
-            <h1>Calendar Connected!</h1>
-            <p>Your Google Calendar is now syncing.</p>
-            <div class="email">${user.email}</div>
-            <p style="margin-top: 2rem; color: #718096;">You can close this window.</p>
+            <div class="logo">📅</div>
+            <h1>Calendar Successfully Connected</h1>
+            <p class="subtitle">Your appointments will now sync automatically</p>
+            <div class="email-box">${user.email}</div>
+            <p class="info">
+              We'll automatically check your calendar for upcoming appointments and send reminder texts to your customers 24 hours and 1 hour before their scheduled time.
+            </p>
+            <p class="close-text">You can safely close this window</p>
           </div>
         </body>
       </html>
