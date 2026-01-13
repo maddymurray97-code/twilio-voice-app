@@ -2,52 +2,47 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
-const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 export async function GET(req: NextRequest) {
   try {
-    console.log('🔄 Starting calendar sync...');
+    console.log('📅 Starting calendar sync...');
     
-    // Get all businesses with Microsoft calendar enabled
-    const businesses = await getBusinessesWithMicrosoftCalendar();
-    console.log(`Found ${businesses.length} businesses to sync`);
+    const businesses = await getBusinessesWithCalendarSync();
+    console.log(`Found ${businesses.length} businesses with calendar sync enabled`);
+    
+    let totalSynced = 0;
     
     for (const business of businesses) {
-      console.log(`Syncing ${business.name}...`);
+      console.log(`\n🔄 Syncing calendar for: ${business.fields['Business Name']}`);
       
-      // Check if token expired
-      if (isTokenExpired(business.tokenExpiry)) {
-        console.log('Token expired, refreshing...');
-        await refreshMicrosoftToken(business);
-      }
-      
-      // Fetch calendar events
-      const events = await fetchMicrosoftCalendarEvents(business);
-      console.log(`Found ${events.length} events`);
-      
-      // Create appointments in Airtable
-      for (const event of events) {
-        await createOrUpdateAppointment(business, event);
+      if (business.fields['Calendar Type'] === 'Google Calendar') {
+        const synced = await syncGoogleCalendar(business);
+        totalSynced += synced;
       }
     }
     
-    return NextResponse.json({ 
-      success: true, 
-      message: `Synced ${businesses.length} calendars` 
+    return NextResponse.json({
+      success: true,
+      message: `Synced ${totalSynced} appointments from ${businesses.length} calendars`
     });
     
   } catch (error) {
     console.error('Sync error:', error);
     return NextResponse.json({ 
-      error: 'Sync failed', 
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Sync failed',
+      details: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
 
-async function getBusinessesWithMicrosoftCalendar() {
-  const formula = `AND({Calendar Type} = 'Microsoft 365', {Calendar Sync Enabled} = TRUE())`;
+async function getBusinessesWithCalendarSync() {
+  const formula = `AND(
+    {Calendar Sync Enabled} = TRUE(),
+    NOT({Google Access Token} = '')
+  )`;
+  
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Businesses?filterByFormula=${encodeURIComponent(formula)}`;
   
   const response = await fetch(url, {
@@ -55,132 +50,176 @@ async function getBusinessesWithMicrosoftCalendar() {
   });
   
   const data = await response.json();
-  return data.records.map((r: any) => ({
-    id: r.id,
-    name: r.fields['Business Name'],
-    accessToken: r.fields['Microsoft Access Token'],
-    refreshToken: r.fields['Microsoft Refresh Token'],
-    tokenExpiry: r.fields['Microsoft Token Expiry'],
-    email: r.fields['Calendar Email']
-  }));
+  return data.records || [];
 }
 
-function isTokenExpired(expiryDate: string): boolean {
-  if (!expiryDate) return true;
-  return new Date(expiryDate) <= new Date();
-}
-
-async function refreshMicrosoftToken(business: any) {
-  const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: MICROSOFT_CLIENT_ID!,
-      client_secret: MICROSOFT_CLIENT_SECRET!,
-      refresh_token: business.refreshToken,
-      grant_type: 'refresh_token',
-      scope: 'https://graph.microsoft.com/Calendars.Read offline_access'
-    })
-  });
+async function syncGoogleCalendar(business: any): Promise<number> {
+  const fields = business.fields;
+  let accessToken = fields['Google Access Token'];
   
-  const tokens = await response.json();
-  const expiryDate = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  
-  await fetch(
-    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Businesses/${business.id}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        fields: {
-          'Microsoft Access Token': tokens.access_token,
-          'Microsoft Refresh Token': tokens.refresh_token,
-          'Microsoft Token Expiry': expiryDate
-        }
-      })
+  // Check if token is expired and refresh if needed
+  const tokenExpiry = fields['Google Token Expiry'];
+  if (tokenExpiry && new Date(tokenExpiry) < new Date()) {
+    console.log('🔄 Access token expired, refreshing...');
+    accessToken = await refreshGoogleToken(business);
+    if (!accessToken) {
+      console.error('❌ Failed to refresh token');
+      return 0;
     }
-  );
+  }
   
-  business.accessToken = tokens.access_token;
-  console.log('✅ Refreshed Microsoft token');
-}
-
-async function fetchMicrosoftCalendarEvents(business: any) {
+  // Get events from Google Calendar for next 30 days
   const now = new Date();
-  const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   
-  const url = `https://graph.microsoft.com/v1.0/me/calendar/events?` +
-    `$filter=start/dateTime ge '${now.toISOString()}' and start/dateTime le '${twoWeeksLater.toISOString()}'&` +
-    `$orderby=start/dateTime`;
+  const calendarUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+    `timeMin=${now.toISOString()}&` +
+    `timeMax=${thirtyDaysFromNow.toISOString()}&` +
+    `singleEvents=true&` +
+    `orderBy=startTime`;
   
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${business.accessToken}`,
-      'Content-Type': 'application/json'
-    }
+  console.log('📡 Fetching Google Calendar events...');
+  
+  const response = await fetch(calendarUrl, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
   });
   
   if (!response.ok) {
-    console.error('Failed to fetch events:', await response.text());
-    return [];
+    console.error('❌ Google Calendar API error:', response.status);
+    const errorData = await response.json();
+    console.error('Error details:', errorData);
+    return 0;
   }
   
-  const data = await response.json();
-  return data.value || [];
+  const calendarData = await response.json();
+  const events = calendarData.items || [];
+  
+  console.log(`📋 Found ${events.length} calendar events`);
+  
+  let syncedCount = 0;
+  
+  for (const event of events) {
+    // Skip events without attendees or that are all-day events
+    if (!event.attendees || !event.start?.dateTime) {
+      continue;
+    }
+    
+    // Get the first attendee as the customer
+    const attendee = event.attendees[0];
+    const customerEmail = attendee.email;
+    
+    // Parse date and time
+    const startDateTime = new Date(event.start.dateTime);
+    const appointmentDate = `${startDateTime.getMonth() + 1}/${startDateTime.getDate()}/${startDateTime.getFullYear()}`;
+    const appointmentTime = startDateTime.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+    
+    // Check if appointment already exists
+    const exists = await checkAppointmentExists(
+      business.id,
+      customerEmail,
+      appointmentDate,
+      appointmentTime
+    );
+    
+    if (exists) {
+      console.log(`⏭️  Skipping existing appointment: ${event.summary}`);
+      continue;
+    }
+    
+    // Extract customer name from attendee
+    const customerName = attendee.displayName || customerEmail.split('@')[0];
+    
+    // Create appointment in Airtable
+    await createAppointment({
+      businessId: business.id,
+      customerName: customerName,
+      customerEmail: customerEmail,
+      appointmentDate: appointmentDate,
+      appointmentTime: appointmentTime,
+      service: event.summary || 'Appointment',
+      googleEventId: event.id
+    });
+    
+    console.log(`✅ Synced: ${event.summary} - ${appointmentDate} ${appointmentTime}`);
+    syncedCount++;
+  }
+  
+  return syncedCount;
 }
 
-async function createOrUpdateAppointment(business: any, event: any) {
-  // Check if appointment already exists
-  const existingApt = await findAppointmentByEventId(event.id);
+async function refreshGoogleToken(business: any): Promise<string | null> {
+  const refreshToken = business.fields['Google Refresh Token'];
   
-  const appointmentData = {
-    'Business Name': [business.id],
-    'Customer Name': event.attendees?.[0]?.emailAddress?.name || event.subject || 'Unknown',
-    'Customer Email': event.attendees?.[0]?.emailAddress?.address || '',
-    'Customer Phone': extractPhoneFromEvent(event),
-    'Appointment Date': event.start.dateTime.split('T')[0],
-    'Appointment Time': formatTime(event.start.dateTime),
-    'Service/Meeting Title': event.subject || 'Meeting',
-    'Microsoft Event ID': event.id,
-    'Status': 'Scheduled'
-  };
+  if (!refreshToken) {
+    console.error('❌ No refresh token available');
+    return null;
+  }
   
-  if (existingApt) {
-    // Update existing
+  try {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID!,
+        client_secret: GOOGLE_CLIENT_SECRET!,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token'
+      })
+    });
+    
+    const tokens = await response.json();
+    
+    if (tokens.error) {
+      console.error('Token refresh error:', tokens);
+      return null;
+    }
+    
+    // Update access token in Airtable
+    const expiryDate = new Date(Date.now() + tokens.expires_in * 1000).toISOString().split('T')[0];
+    
     await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Appointments/${existingApt.id}`,
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Businesses/${business.id}`,
       {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ fields: appointmentData })
+        body: JSON.stringify({
+          fields: {
+            'Google Access Token': tokens.access_token,
+            'Google Token Expiry': expiryDate
+          }
+        })
       }
     );
-    console.log(`✅ Updated appointment: ${appointmentData['Service/Meeting Title']}`);
-  } else {
-    // Create new
-    await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Appointments`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ fields: appointmentData })
-      }
-    );
-    console.log(`✅ Created appointment: ${appointmentData['Service/Meeting Title']}`);
+    
+    console.log('✅ Token refreshed successfully');
+    return tokens.access_token;
+    
+  } catch (error) {
+    console.error('❌ Token refresh failed:', error);
+    return null;
   }
 }
 
-async function findAppointmentByEventId(eventId: string) {
-  const formula = `{Microsoft Event ID} = '${eventId}'`;
+async function checkAppointmentExists(
+  businessId: string,
+  customerEmail: string,
+  appointmentDate: string,
+  appointmentTime: string
+): Promise<boolean> {
+  const formula = `AND(
+    {Business Name} = '${businessId}',
+    {Customer Email} = '${customerEmail}',
+    {Appointment Date} = '${appointmentDate}',
+    {Appointment Time} = '${appointmentTime}'
+  )`;
+  
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Appointments?filterByFormula=${encodeURIComponent(formula)}`;
   
   const response = await fetch(url, {
@@ -188,22 +227,38 @@ async function findAppointmentByEventId(eventId: string) {
   });
   
   const data = await response.json();
-  return data.records[0];
+  return (data.records?.length || 0) > 0;
 }
 
-function extractPhoneFromEvent(event: any): string {
-  // Try to extract phone from body or attendee info
-  const body = event.body?.content || '';
-  const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/;
-  const match = body.match(phoneRegex);
-  return match ? match[0] : '';
-}
-
-function formatTime(dateTimeString: string): string {
-  const date = new Date(dateTimeString);
-  return date.toLocaleTimeString('en-US', { 
-    hour: 'numeric', 
-    minute: '2-digit',
-    hour12: true 
-  });
+async function createAppointment(data: {
+  businessId: string;
+  customerName: string;
+  customerEmail: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  service: string;
+  googleEventId: string;
+}) {
+  await fetch(
+    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Appointments`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        fields: {
+          'Business Name': [data.businessId],
+          'Customer Name': data.customerName,
+          'Customer Email': data.customerEmail,
+          'Appointment Date': data.appointmentDate,
+          'Appointment Time': data.appointmentTime,
+          'Service/Meeting Title': data.service,
+          'Status': 'Scheduled',
+          'Google Event ID': data.googleEventId
+        }
+      })
+    }
+  );
 }
