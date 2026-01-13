@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(`
       <html>
         <head>
+          <meta charset="UTF-8">
           <style>
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
               justify-content: center;
               min-height: 100vh;
               margin: 0;
-              background: linear-gradient(135deg, #ffa751 0%, #ffe259 100%);
+              background: linear-gradient(135deg, #CC785C 0%, #E07A5F 100%);
             }
             .container {
               background: white;
@@ -117,13 +118,30 @@ export async function GET(req: NextRequest) {
             .logo {
               width: 60px;
               height: 60px;
-              background: linear-gradient(135deg, #ff8a50 0%, #ffd140 100%);
+              background: linear-gradient(135deg, #CC785C 0%, #E07A5F 100%);
               border-radius: 50%;
               margin: 0 auto 1.5rem;
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 2rem;
+            }
+            .checkmark {
+              width: 30px;
+              height: 30px;
+              border: 3px solid white;
+              border-radius: 50%;
+              position: relative;
+            }
+            .checkmark:after {
+              content: '';
+              position: absolute;
+              left: 8px;
+              top: 4px;
+              width: 8px;
+              height: 14px;
+              border: solid white;
+              border-width: 0 3px 3px 0;
+              transform: rotate(45deg);
             }
             h1 { 
               color: #1a202c; 
@@ -161,7 +179,9 @@ export async function GET(req: NextRequest) {
         </head>
         <body>
           <div class="container">
-            <div class="logo">📅</div>
+            <div class="logo">
+              <div class="checkmark"></div>
+            </div>
             <h1>Calendar Successfully Connected</h1>
             <p class="subtitle">Your appointments will now sync automatically</p>
             <div class="email-box">${user.email}</div>
