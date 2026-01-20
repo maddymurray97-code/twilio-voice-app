@@ -5,6 +5,9 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   try {
     console.log('📅 Starting calendar sync...');
